@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>曲柄滑塊機構動態模擬</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #f8fafc; font-family: sans-serif; }
+        canvas { background: white; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .control-panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-slate-800">曲柄滑塊機構 (Slider-Crank Mechanism)</h1>
+            <p class="text-slate-600 mt-2">內燃機與往復式機械的核心運動轉換原理</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 控制面板 -->
+            <div class="control-panel space-y-6">
+                <h2 class="text-xl font-semibold border-b pb-2">參數設定</h2>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">曲柄半徑 (r): <span id="rVal">50</span></label>
+                    <input type="range" id="rInput" min="20" max="80" value="50" class="w-full h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">連桿長度 (L): <span id="lVal">150</span></label>
+                    <input type="range" id="lInput" min="100" max="250" value="150" class="w-full h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">角速度 (ω): <span id="wVal">2</span></label>
+                    <input type="range" id="wInput" min="0.5" max="10" step="0.5" value="2" class="w-full h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div class="pt-4 border-t">
+                    <h3 class="font-medium text-slate-700 mb-2">運動學公式參考：</h3>
+                    <ul class="text-xs text-slate-500 space-y-2">
+                        <li>位移: $x = r \cos\theta + \sqrt{L^2 - (r \sin\theta)^2}$</li>
+                        <li>特性比: $\lambda = r/L$ (通常建議 < 1/3)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 動畫視窗 -->
+            <div class="lg:col-span-2 space-y-4">
+                <div class="relative">
+                    <canvas id="simCanvas" width="600" height="300" class="w-full h-auto"></canvas>
+                    <div class="absolute top-4 right-4 bg-white/80 p-2 rounded text-xs">
+                        實時位置: <span id="currentX" class="font-mono font-bold">0.00</span>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <canvas id="chartCanvas" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 理論說明 -->
+        <article class="mt-12 prose prose-slate max-w-none bg-white p-8 rounded-xl shadow-sm">
+            <h2 class="text-2xl font-bold mb-4">機構概述</h2>
+            <p>曲柄滑塊機構是由<b>曲柄、連桿、滑塊</b>及<b>機架</b>四個構件組成的平面連桿機構。它最主要的功能是將「旋轉運動」與「往復直線運動」進行相互轉換。</p>
+            
+            <div class="grid md:grid-cols-2 gap-8 mt-6">
+                <div>
+                    <h3 class="text-lg font-semibold text-blue-600">應用實例</h3>
+                    <ul class="list-disc ml-5 mt-2">
+                        <li><b>往復式引擎：</b>活塞（滑塊）在氣缸內往復運動，帶動曲軸（曲柄）旋轉。</li>
+                        <li><b>沖床/壓床：</b>馬達帶動曲柄旋轉，使滑塊產生巨大的直線衝擊力。</li>
+                        <li><b>抽水機：</b>將電動機的圓周運動轉化為泵浦的往復抽吸運動。</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-blue-600">死點 (Dead Center)</h3>
+                    <p>當曲柄與連桿在一條直線上時，稱為死點。此時滑塊位於極限位置：</p>
+                    <ul class="list-disc ml-5 mt-2">
+                        <li><b>上死點 (TDC)：</b>曲柄與連桿重合，滑塊距離曲柄中心最遠。</li>
+                        <li><b>下死點 (BDC)：</b>曲柄與連桿反向重合，滑塊距離曲柄中心最近。</li>
+                    </ul>
+                </div>
+            </div>
+        </article>
+    </div>
+
+    <script>
+        // 使用立即執行函數避免全域變數衝突
+        (function() {
+            const canvas = document.getElementById('simCanvas');
+            const ctx = canvas.getContext('2d');
+            const chartCtx = document.getElementById('chartCanvas').getContext('2d');
+
+            // 參數設定
+            let config = {
+                r: 50,
+                L: 150,
+                omega: 2,
+                theta: 0,
+                centerX: 150,
+                centerY: 150
+            };
+
+            // 數據紀錄用於圖表
+            let history = [];
+            const maxHistory = 100;
+
+            // 初始化圖表
+            const chart = new Chart(chartCtx, {
+                type: 'line',
+                data: {
+                    labels: Array(maxHistory).fill(''),
+                    datasets: [{
+                        label: '滑塊位移 (x)',
+                        data: [],
+                        borderColor: '#3b82f6',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    animation: false,
+                    scales: { y: { beginAtZero: false }, x: { display: false } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            // 綁定輸入事件
+            document.getElementById('rInput').oninput = (e) => { 
+                config.r = +e.target.value; 
+                document.getElementById('rVal').innerText = config.r; 
+            };
+            document.getElementById('lInput').oninput = (e) => { 
+                config.L = +e.target.value; 
+                document.getElementById('lVal').innerText = config.L; 
+            };
+            document.getElementById('wInput').oninput = (e) => { 
+                config.omega = +e.target.value; 
+                document.getElementById('wVal').innerText = config.omega; 
+            };
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 更新角度
+                config.theta += config.omega * 0.02;
+                
+                // 計算曲柄末端 (A點)
+                const Ax = config.centerX + config.r * Math.cos(config.theta);
+                const Ay = config.centerY + config.r * Math.sin(config.theta);
+                
+                // 計算滑塊位置 (B點)
+                // 確保開根號內不為負數 (機械干涉檢查)
+                const dy = Ay - config.centerY;
+                const discriminant = config.L * config.L - dy * dy;
+                const Bx = discriminant > 0 ? Ax + Math.sqrt(discriminant) : Ax;
+                const By = config.centerY;
+
+                // 繪製導軌
+                ctx.strokeStyle = '#e2e8f0';
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(config.centerX, config.centerY);
+                ctx.lineTo(config.centerX + config.r + config.L + 50, config.centerY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // 繪製曲柄
+                ctx.lineWidth = 6;
+                ctx.strokeStyle = '#334155';
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(config.centerX, config.centerY);
+                ctx.lineTo(Ax, Ay);
+                ctx.stroke();
+
+                // 繪製連桿
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = '#64748b';
+                ctx.beginPath();
+                ctx.moveTo(Ax, Ay);
+                ctx.lineTo(Bx, By);
+                ctx.stroke();
+
+                // 繪製關節點
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath();
+                ctx.arc(config.centerX, config.centerY, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(Ax, Ay, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 繪製滑塊
+                ctx.fillStyle = '#3b82f6';
+                ctx.fillRect(Bx - 20, By - 15, 40, 30);
+                ctx.strokeStyle = '#1d4ed8';
+                ctx.strokeRect(Bx - 20, By - 15, 40, 30);
+
+                // 更新數據與圖表
+                const currentXPos = Bx - config.centerX;
+                document.getElementById('currentX').innerText = currentXPos.toFixed(2);
+                
+                history.push(currentXPos);
+                if (history.length > maxHistory) history.shift();
+                chart.data.datasets[0].data = history;
+                chart.update();
+
+                requestAnimationFrame(draw);
+            }
+
+            // 啟動動畫
+            window.addEventListener('load', draw);
+        })();
+    </script>
+</body>
+</html>

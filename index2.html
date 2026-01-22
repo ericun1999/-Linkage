@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>汽車雨刷連桿機構模擬</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #f8fafc; font-family: sans-serif; }
+        canvas { background: white; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .control-panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-slate-800">汽車雨刷連桿機構 (Wiper Linkage System)</h1>
+            <p class="text-slate-600 mt-2">基於四連桿機構的旋轉轉擺動運動分析</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 控制面板 -->
+            <div class="control-panel space-y-6">
+                <h2 class="text-xl font-semibold border-b pb-2">機構參數</h2>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">驅動曲柄 (r): <span id="rVal">40</span></label>
+                    <input type="range" id="rInput" min="20" max="60" value="40" class="w-full h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">連桿長度 (L): <span id="lInputVal">160</span></label>
+                    <input type="range" id="lInput" min="120" max="220" value="160" class="w-full h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">搖臂長度 (a): <span id="aVal">80</span></label>
+                    <input type="range" id="aInput" min="60" max="120" value="80" class="w-full h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">馬達轉速: <span id="wVal">2</span></label>
+                    <input type="range" id="wInput" min="0.5" max="5" step="0.5" value="2" class="w-full h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div class="pt-4 border-t">
+                    <h3 class="font-medium text-slate-700 mb-2">機械原理：</h3>
+                    <p class="text-xs text-slate-500 leading-relaxed">
+                        雨刷利用<b>曲柄搖臂機構</b>，將馬達的 360° 旋轉轉化為雨刷臂的往復擺動。透過調整連桿比例，可以控制雨刷的掃掠角度。
+                    </p>
+                </div>
+            </div>
+
+            <!-- 動畫視窗 -->
+            <div class="lg:col-span-2 space-y-4">
+                <div class="relative">
+                    <canvas id="simCanvas" width="600" height="400" class="w-full h-auto"></canvas>
+                    <div class="absolute top-4 right-4 bg-white/80 p-2 rounded text-xs">
+                        擺動角度: <span id="currentAngle" class="font-mono font-bold">0.0°</span>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <canvas id="chartCanvas" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 理論說明 -->
+        <article class="mt-12 prose prose-slate max-w-none bg-white p-8 rounded-xl shadow-sm">
+            <h2 class="text-2xl font-bold mb-4">雨刷連桿機構深度解析</h2>
+            <p>汽車雨刷系統是典型的<b>四連桿機構</b>應用。馬達驅動一個小曲柄連續旋轉，透過長連桿帶動另一個無法全迴轉的「搖臂」，從而實現雨刷片在擋風玻璃上的扇形掃掠。</p>
+            
+            <div class="grid md:grid-cols-2 gap-8 mt-6">
+                <div>
+                    <h3 class="text-lg font-semibold text-blue-600">機構組成</h3>
+                    <ul class="list-disc ml-5 mt-2">
+                        <li><b>主動曲柄：</b>由雨刷馬達帶動，作圓周運動。</li>
+                        <li><b>傳動連桿：</b>傳遞動力，並決定整體的運動軌跡。</li>
+                        <li><b>從動搖臂：</b>支撐雨刷臂，受到約束僅能作一定角度的往復擺動。</li>
+                        <li><b>機架：</b>車體支撐結構，固定曲柄中心與搖臂支點的距離。</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-blue-600">設計關鍵</h3>
+                    <p>為了確保雨刷能有效清潔玻璃並回到正確位置：</p>
+                    <ul class="list-disc ml-5 mt-2">
+                        <li><b>葛拉索夫定理 (Grashof's Law)：</b>桿長之和必須滿足特定條件，才能確保一個桿全迴轉而另一個桿擺動。</li>
+                        <li><b>掃掠角度：</b>通常設定在 80° 至 110° 之間，這取決於搖臂與曲柄的長度比。</li>
+                    </ul>
+                </div>
+            </div>
+        </article>
+    </div>
+
+    <script>
+        (function() {
+            const canvas = document.getElementById('simCanvas');
+            const ctx = canvas.getContext('2d');
+            const chartCtx = document.getElementById('chartCanvas').getContext('2d');
+
+            // 參數設定
+            let config = {
+                r: 40,      // 曲柄
+                L: 160,     // 連桿
+                a: 80,      // 搖臂
+                d: 180,     // 兩支點距離 (機架)
+                theta: 0,
+                omega: 2,
+                centerX: 150,
+                centerY: 250,
+                pivotX: 330, // 搖臂支點
+                pivotY: 250
+            };
+
+            let history = [];
+            const maxHistory = 100;
+
+            const chart = new Chart(chartCtx, {
+                type: 'line',
+                data: {
+                    labels: Array(maxHistory).fill(''),
+                    datasets: [{
+                        label: '搖臂角度 (deg)',
+                        data: [],
+                        borderColor: '#10b981',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    animation: false,
+                    scales: { y: { beginAtZero: false }, x: { display: false } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            document.getElementById('rInput').oninput = (e) => { config.r = +e.target.value; document.getElementById('rVal').innerText = config.r; };
+            document.getElementById('lInput').oninput = (e) => { config.L = +e.target.value; document.getElementById('lInputVal').innerText = config.L; };
+            document.getElementById('aInput').oninput = (e) => { config.a = +e.target.value; document.getElementById('aVal').innerText = config.a; };
+            document.getElementById('wInput').oninput = (e) => { config.omega = +e.target.value; document.getElementById('wVal').innerText = config.omega; };
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                config.theta += config.omega * 0.02;
+                
+                // 1. 曲柄末端 A
+                const Ax = config.centerX + config.r * Math.cos(config.theta);
+                const Ay = config.centerY + config.r * Math.sin(config.theta);
+                
+                // 2. 計算搖臂末端 B (使用兩圓交點公式)
+                const distAB = config.L;
+                const distPB = config.a;
+                const dx = Ax - config.pivotX;
+                const dy = Ay - config.pivotY;
+                const distAP = Math.sqrt(dx*dx + dy*dy);
+                
+                let Bx, By, phi;
+                
+                // 簡單幾何檢查：如果連桿太短無法連接，則跳過繪圖
+                if (distAP < Math.abs(distAB - distPB) || distAP > (distAB + distPB)) {
+                    ctx.fillStyle = "red";
+                    ctx.fillText("機構鎖死：請調整參數", 250, 50);
+                } else {
+                    const a = (distPB*distPB - distAB*distAB + distAP*distAP) / (2 * distAP);
+                    const h = Math.sqrt(Math.max(0, distPB*distPB - a*a));
+                    const x2 = config.pivotX + a * (Ax - config.pivotX) / distAP;
+                    const y2 = config.pivotY + a * (Ay - config.pivotY) / distAP;
+                    
+                    // 取其中一個交點 (向上方擺動的點)
+                    Bx = x2 - h * (Ay - config.pivotY) / distAP;
+                    By = y2 + h * (Ax - config.pivotX) / distAP;
+                    
+                    phi = Math.atan2(By - config.pivotY, Bx - config.pivotX);
+
+                    // 繪製掃掠區域
+                    ctx.beginPath();
+                    ctx.globalAlpha = 0.1;
+                    ctx.fillStyle = '#3b82f6';
+                    ctx.moveTo(config.pivotX, config.pivotY);
+                    ctx.arc(config.pivotX, config.pivotY, 120, -Math.PI, 0);
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
+
+                    // 繪製雨刷臂 (延長線)
+                    const wiperLen = 120;
+                    const Wx = config.pivotX + wiperLen * Math.cos(phi);
+                    const Wy = config.pivotY + wiperLen * Math.sin(phi);
+                    
+                    ctx.lineWidth = 8;
+                    ctx.strokeStyle = '#1e293b';
+                    ctx.beginPath();
+                    ctx.moveTo(config.pivotX, config.pivotY);
+                    ctx.lineTo(Wx, Wy);
+                    ctx.stroke();
+
+                    // 繪製雨刷片
+                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = '#475569';
+                    const bladeSize = 40;
+                    ctx.beginPath();
+                    const bphi = phi + Math.PI/2;
+                    ctx.moveTo(Wx - Math.cos(bphi)*bladeSize, Wy - Math.sin(bphi)*bladeSize);
+                    ctx.lineTo(Wx + Math.cos(bphi)*bladeSize, Wy + Math.sin(bphi)*bladeSize);
+                    ctx.stroke();
+
+                    // 繪製連桿機構
+                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = '#94a3b8';
+                    ctx.beginPath();
+                    ctx.moveTo(Ax, Ay);
+                    ctx.lineTo(Bx, By);
+                    ctx.stroke();
+
+                    // 搖臂
+                    ctx.strokeStyle = '#64748b';
+                    ctx.beginPath();
+                    ctx.moveTo(config.pivotX, config.pivotY);
+                    ctx.lineTo(Bx, By);
+                    ctx.stroke();
+
+                    // 節點
+                    ctx.fillStyle = '#ef4444';
+                    [ [config.centerX, config.centerY], [Ax, Ay], [Bx, By], [config.pivotX, config.pivotY] ].forEach(pt => {
+                        ctx.beginPath();
+                        ctx.arc(pt[0], pt[1], 5, 0, Math.PI*2);
+                        ctx.fill();
+                    });
+
+                    // 更新數據
+                    const angleDeg = (phi * 180 / Math.PI).toFixed(1);
+                    document.getElementById('currentAngle').innerText = angleDeg + "°";
+                    history.push(parseFloat(angleDeg));
+                    if (history.length > maxHistory) history.shift();
+                    chart.data.datasets[0].data = history;
+                    chart.update();
+                }
+
+                // 曲柄
+                ctx.lineWidth = 6;
+                ctx.strokeStyle = '#334155';
+                ctx.beginPath();
+                ctx.moveTo(config.centerX, config.centerY);
+                ctx.lineTo(Ax, Ay);
+                ctx.stroke();
+
+                requestAnimationFrame(draw);
+            }
+            window.addEventListener('load', draw);
+        })();
+    </script>
+</body>
+</html>
